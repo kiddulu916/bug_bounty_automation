@@ -1,0 +1,48 @@
+import os
+import sys
+import signal
+from plugins.recon import (
+    amass_enum,
+    subfinder_enum,
+    assetfinder_enum,
+    crtsh_enum,
+    shodan_enum,
+    bgpview_enum,
+)
+from plugins.recon.recon_utils import ensure_dirs
+from core.logger import setup_logger, setup_error_logger
+
+logger = setup_logger()
+
+def run(target):
+    error_logger = setup_error_logger(target)
+    logger.info(f"[Recon] Starting recon for {target}")
+    base_dir = os.path.join("outputs", target)
+    tools = ["amass", "subfinder", "assetfinder", "crtsh", "shodan", "bgpview"]
+    ensure_dirs(base_dir, tools)
+
+    tool_sequence = [
+        ("amass", amass_enum.run),
+        ("subfinder", subfinder_enum.run),
+        ("assetfinder", assetfinder_enum.run),
+        ("crtsh", crtsh_enum.run),
+        ("shodan", shodan_enum.run),
+        ("bgpview", bgpview_enum.run),
+    ]
+
+    try:
+        for name, tool_fn in tool_sequence:
+            logger.info(f"[Recon] Running {name} plugin...")
+            status = tool_fn(target, os.path.join(base_dir, name))
+            if status == "skipped":
+                logger.info(f"[Recon] {name} was skipped by user.")
+            elif status == "fail":
+                logger.warning(f"[Recon] {name} failed.")
+            elif status == "success":
+                logger.info(f"[Recon] {name} completed successfully.")
+    except KeyboardInterrupt:
+        logger.warning("[Recon] Recon interrupted by user.")
+        sys.exit(130)
+    except Exception as e:
+        logger.exception(f"[Recon] Fatal error in recon: {e}")
+        error_logger.error(f"{name} failed: {e}")
